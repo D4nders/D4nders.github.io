@@ -352,24 +352,41 @@
             renderAll();
         }
 
+        // --- ICS Generation (FIXED for Timezones) ---
         function generateICS() {
-            const toICSFormat = (date, timeStr) => {
-                const [hours, minutes] = timeStr.split(':');
-                const dt = new Date(date);
-                dt.setUTCHours(hours, minutes, 0, 0);
-                return dt.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-            };
-            let icsContent = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ShiftScheduler//EN'];
+            let icsContent = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//d4nders.github.io//Shift Scheduler v1.1//EN'];
+            const dtStamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
             for (const dateStr in selectedShifts) {
                 const shiftName = selectedShifts[dateStr];
                 const shiftInfo = shiftDefinitions[shiftName];
-                if (!shiftInfo) continue; // Skip if preset was deleted
-                let startDate = new Date(dateStr + 'T00:00:00');
-                let endDate = new Date(dateStr + 'T00:00:00');
-                if (shiftInfo.startTime > shiftInfo.endTime) {
-                    endDate.setDate(endDate.getDate() + 1);
+                if (!shiftInfo) continue;
+
+                // Construct the start date and time as a "floating" local time (no Z)
+                const startTimeStr = shiftInfo.startTime.replace(':', '');
+                const dtStart = `${dateStr.replace(/-/g, '')}T${startTimeStr}00`;
+
+                // Determine the end date, accounting for overnight shifts
+                // We use UTC for the date math to avoid local timezone issues with DST
+                const startDateObj = new Date(dateStr + 'T00:00:00Z'); 
+                if (shiftInfo.startTime >= shiftInfo.endTime) {
+                    startDateObj.setUTCDate(startDateObj.getUTCDate() + 1);
                 }
-                const event = ['BEGIN:VEVENT', `UID:${dateStr}@shiftscheduler.app`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'}`, `DTSTART:${toICSFormat(startDate, shiftInfo.startTime)}`, `DTEND:${toICSFormat(endDate, shiftInfo.endTime)}`, `SUMMARY:${shiftName} Shift`, 'END:VEVENT'];
+                const endDateStr = startDateObj.toISOString().slice(0, 10);
+
+                // Construct the end date and time as a "floating" local time (no Z)
+                const endTimeStr = shiftInfo.endTime.replace(':', '');
+                const dtEnd = `${endDateStr.replace(/-/g, '')}T${endTimeStr}00`;
+
+                const event = [
+                    'BEGIN:VEVENT',
+                    `UID:${dateStr}@d4nders.github.io`,
+                    `DTSTAMP:${dtStamp}`,
+                    `DTSTART:${dtStart}`,
+                    `DTEND:${dtEnd}`,
+                    `SUMMARY:${shiftName}`,
+                    'END:VEVENT'
+                ];
                 icsContent.push(...event);
             }
             icsContent.push('END:VCALENDAR');
